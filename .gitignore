@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.venv/
+
+# 実験の出力 (再現はコード + config.json から行う)
+runs/
+
+# OS / エディタ
+.DS_Store
+.idea/
+.vscode/
