@@ -80,6 +80,10 @@ class Agent(ABC):
 
         learn=True なら探索しながら各手で学習し、False なら探索も学習もせず方策どおりに動く。
         """
+        if env.n_actions != self._n_actions:
+            raise ValueError(
+                f"環境の行動数 {env.n_actions} とエージェントの行動数 {self._n_actions} が一致しません"
+            )
         state = env.reset()
         total_reward = 0.0
         while True:

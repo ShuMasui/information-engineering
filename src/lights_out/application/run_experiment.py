@@ -22,7 +22,7 @@ class ExperimentSettings:
     """実験の設定。
 
     Attributes:
-        name: 実験の名前 (run の ID に使う)。
+        name: 実験の名前 (run のディレクトリ名に使うので、'/' や '\\' は含められない)。
         n_episodes: 学習するエピソード数。
         eval_interval: 何エピソードごとに評価するか。0 なら学習前と学習後だけ。
         eval_episodes: 1 回の評価で試すエピソード数。
@@ -36,6 +36,8 @@ class ExperimentSettings:
     eval_seed: int = 0
 
     def __post_init__(self) -> None:
+        if not self.name.strip() or any(char in self.name for char in "/\\"):
+            raise ValueError(f"name は空でなく、'/' や '\\' を含まない文字列にしてください: {self.name!r}")
         if self.n_episodes < 0:
             raise ValueError(f"n_episodes は 0 以上にしてください: {self.n_episodes}")
         if self.eval_interval < 0:

@@ -61,6 +61,26 @@ def test_cells_accepts_any_sequence_and_is_hashable():
     assert hash(board) == hash(Board(2, (1, 0, 0, 1)))
 
 
+def test_cells_are_normalized_to_int():
+    board = Board(2, [True, False, 0.0, 1.0])  # type: ignore[arg-type]
+    assert board.cells == (1, 0, 0, 1)
+    assert all(type(cell) is int for cell in board.cells)
+
+
+def test_press_accepts_int_like_indices():
+    class NumpyLikeInt:  # np.int64 のように __index__ を持つ値
+        def __index__(self):
+            return 1
+
+    assert Board.solved(3).press(NumpyLikeInt()) == Board.solved(3).press(1)  # type: ignore[arg-type]
+
+
+def test_press_rejects_float_index_without_breaking_later_presses():
+    with pytest.raises(TypeError):
+        Board.solved(4).press(1.0)  # type: ignore[arg-type]
+    assert lit_cells(Board.solved(4).press(1)) == {0, 1, 2, 5}
+
+
 def test_str_shows_one_row_per_line():
     assert str(Board(2, (1, 0, 0, 1))) == "● ○\n○ ●"
 

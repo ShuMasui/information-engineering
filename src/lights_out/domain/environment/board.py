@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import operator
 from dataclasses import dataclass
 from functools import lru_cache
 
@@ -39,13 +40,13 @@ class Board:
     def __post_init__(self) -> None:
         if self.size < 1:
             raise ValueError(f"size は 1 以上にしてください: {self.size}")
-        object.__setattr__(self, "cells", tuple(self.cells))
-        if len(self.cells) != self.size**2:
-            raise ValueError(
-                f"cells の長さは size**2 = {self.size**2} 個にしてください: {len(self.cells)}"
-            )
-        if any(cell not in (OFF, LIT) for cell in self.cells):
-            raise ValueError(f"cells の値は 0 か 1 にしてください: {self.cells}")
+        cells = tuple(self.cells)
+        if len(cells) != self.size**2:
+            raise ValueError(f"cells の長さは size**2 = {self.size**2} 個にしてください: {len(cells)}")
+        if any(cell not in (OFF, LIT) for cell in cells):
+            raise ValueError(f"cells の値は 0 か 1 にしてください: {cells}")
+        # True や 1.0 が渡されても、盤面は常に int の 0/1 で持つ
+        object.__setattr__(self, "cells", tuple(int(cell) for cell in cells))
 
     @classmethod
     def solved(cls, size: int) -> Board:
@@ -58,6 +59,7 @@ class Board:
 
     def press(self, index: int) -> Board:
         """index のマスを押す。自身と上下左右のマスが反転する。"""
+        index = operator.index(index)  # float などは lru_cache に入る前に TypeError で弾く
         if not 0 <= index < self.n_cells:
             raise ValueError(f"index は 0 以上 {self.n_cells} 未満にしてください: {index}")
         cells = list(self.cells)

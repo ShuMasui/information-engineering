@@ -64,6 +64,18 @@ def test_n_actions_must_be_positive():
         ScriptedAgent([0], n_actions=0)
 
 
+@pytest.mark.parametrize("n_actions", [4, 16])
+def test_agent_rejects_environment_with_different_number_of_actions(n_actions):
+    agent = ScriptedAgent([0], n_actions=n_actions)  # 環境は 3x3 = 9 行動
+    with pytest.raises(ValueError):
+        agent.play_episode(make_env(), learn=True)
+    with pytest.raises(ValueError):
+        agent.train(make_env(), n_episodes=1)
+    with pytest.raises(ValueError):
+        agent.evaluate(make_env(), n_episodes=1)
+    assert agent.transitions == []
+
+
 def test_play_episode_learning_passes_every_transition_to_update():
     agent = ScriptedAgent([8, 8, 0])  # 8 を 2 回押して元に戻し、0 で全消灯
     record = agent.play_episode(make_env(), learn=True, episode=7)

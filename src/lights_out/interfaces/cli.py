@@ -50,35 +50,39 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    env = LightsOutEnvironment(
-        EnvironmentConfig(
-            size=args.size,
-            max_steps=args.max_steps,
-            scramble_moves=args.scramble_moves,
-            seed=args.seed,
+    try:
+        env = LightsOutEnvironment(
+            EnvironmentConfig(
+                size=args.size,
+                max_steps=args.max_steps,
+                scramble_moves=args.scramble_moves,
+                seed=args.seed,
+            )
         )
-    )
-    agent = QLearningAgent(
-        env.n_actions,
-        QLearningConfig(
-            learning_rate=args.learning_rate,
-            discount_factor=args.discount_factor,
-            epsilon_start=args.epsilon_start,
-            epsilon_min=args.epsilon_min,
-            epsilon_decay=args.epsilon_decay,
-            seed=args.seed + 1,
-        ),
-    )
-    settings = ExperimentSettings(
-        name=args.name,
-        n_episodes=args.episodes,
-        eval_interval=args.eval_interval,
-        eval_episodes=args.eval_episodes,
-        eval_seed=args.seed + 2,
-    )
+        agent = QLearningAgent(
+            env.n_actions,
+            QLearningConfig(
+                learning_rate=args.learning_rate,
+                discount_factor=args.discount_factor,
+                epsilon_start=args.epsilon_start,
+                epsilon_min=args.epsilon_min,
+                epsilon_decay=args.epsilon_decay,
+                seed=args.seed + 1,
+            ),
+        )
+        settings = ExperimentSettings(
+            name=args.name,
+            n_episodes=args.episodes,
+            eval_interval=args.eval_interval,
+            eval_episodes=args.eval_episodes,
+            eval_seed=args.seed + 2,
+        )
+    except ValueError as error:  # 設定の値の検証エラーは、トレースバックでなく使い方のエラーとして出す
+        parser.error(str(error))
 
     result = ExperimentRunner(FileExperimentRepository(args.runs_dir)).run(env, agent, settings)
     print(f"記録: {args.runs_dir}/{result.run_id}")

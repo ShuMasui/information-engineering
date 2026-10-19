@@ -162,7 +162,15 @@ def test_run_does_not_touch_the_training_environment_config():
 
 @pytest.mark.parametrize(
     "kwargs",
-    [{"n_episodes": -1}, {"eval_interval": -1}, {"eval_episodes": 0}],
+    [
+        {"n_episodes": -1},
+        {"eval_interval": -1},
+        {"eval_episodes": 0},
+        {"name": ""},
+        {"name": "  "},
+        {"name": "a/b"},
+        {"name": "a\\b"},
+    ],
 )
 def test_settings_reject_invalid_values(kwargs):
     with pytest.raises(ValueError):

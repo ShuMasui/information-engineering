@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from lights_out.interfaces.cli import main
 
 SMALL_RUN = ["--size", "3", "--scramble-moves", "1", "--max-steps", "10", "--eval-episodes", "5"]
@@ -42,6 +44,7 @@ def test_main_records_the_given_options_in_config(tmp_path):
     assert config["agent"]["hyperparameters"]["learning_rate"] == 0.3
     assert config["agent"]["hyperparameters"]["epsilon_decay"] == 0.9
     assert config["agent"]["hyperparameters"]["seed"] == 8
+    assert config["settings"]["eval_seed"] == 9
 
 
 def test_main_is_reproducible_for_the_same_seed(tmp_path):
@@ -53,8 +56,27 @@ def test_main_is_reproducible_for_the_same_seed(tmp_path):
     assert (run_a / "agent.json").read_text(encoding="utf-8") == (run_b / "agent.json").read_text(encoding="utf-8")
 
 
-def test_demo_renders_the_board_until_the_episode_ends(tmp_path, capsys):
+def test_demo_plays_the_learned_policy_until_solved(tmp_path, capsys):
     main([*SMALL_RUN, "--episodes", "300", "--runs-dir", str(tmp_path), "--demo"])
     out = capsys.readouterr().out
-    assert "step 0/10" in out
+    assert "step 0/10  solved: False" in out
     assert "を押す" in out
+    assert out.rstrip().splitlines()[-4].endswith("solved: True")  # 3x3 の盤面 3 行の前の行
+
+
+@pytest.mark.parametrize(
+    "bad_args",
+    [
+        ["--size", "0"],
+        ["--scramble-moves", "10", "--size", "3"],
+        ["--learning-rate", "0"],
+        ["--episodes", "-1"],
+        ["--name", "a/b"],
+    ],
+)
+def test_invalid_options_exit_with_a_usage_error_and_write_nothing(tmp_path, capsys, bad_args):
+    with pytest.raises(SystemExit) as exit_info:
+        main([*bad_args, "--runs-dir", str(tmp_path)])
+    assert exit_info.value.code == 2
+    assert "Traceback" not in capsys.readouterr().err
+    assert list(tmp_path.iterdir()) == []

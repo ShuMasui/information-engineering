@@ -134,6 +134,7 @@ def test_episode_is_truncated_at_max_steps():
     second = env.step(8)  # 同じマスを 2 回押して元に戻る
     assert second.truncated
     assert not second.terminated
+    assert second.reward == -1.0  # 打ち切りの手はクリア報酬ではない
     assert second.done
     assert env.is_truncated()
     assert env.is_done()
