@@ -2,7 +2,13 @@ import json
 
 import pytest
 
-from lights_out.domain.agent import QLearningAgent, QLearningConfig, Transition
+from lights_out.domain.agent import (
+    MonteCarloConfig,
+    QLearningAgent,
+    QLearningConfig,
+    SarsaConfig,
+    Transition,
+)
 from lights_out.domain.environment import EnvironmentConfig, LightsOutEnvironment
 
 S0 = (0, 1)
@@ -205,6 +211,12 @@ def test_same_seed_gives_same_actions():
 def test_config_rejects_invalid_values(kwargs):
     with pytest.raises(ValueError):
         QLearningConfig(**kwargs)
+
+
+@pytest.mark.parametrize("config_cls", [QLearningConfig, SarsaConfig, MonteCarloConfig])  # 共通の TabularConfig
+@pytest.mark.parametrize("discount_factor", [0.0, 1.0])
+def test_config_accepts_the_boundary_discount_factors(config_cls, discount_factor):
+    assert config_cls(discount_factor=discount_factor).discount_factor == discount_factor
 
 
 # ----- 実際に学習できる -----

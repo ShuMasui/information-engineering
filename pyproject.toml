@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "lights-out-rl"
 version = "0.1.0"
-description = "ライツアウト環境と強化学習エージェント (Q学習) の実験用プログラム"
+description = "ライツアウト環境と強化学習エージェント (Q学習・SARSA・Profit Sharing・モンテカルロ法) の実験用プログラム"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = []

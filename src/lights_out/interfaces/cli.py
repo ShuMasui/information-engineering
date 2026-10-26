@@ -1,30 +1,86 @@
-"""コマンドライン: Q学習エージェントでライツアウトを学習する。
+"""コマンドライン: 表形式の強化学習エージェントでライツアウトを学習する。
 
     python -m lights_out --episodes 10000 --seed 0
+    python -m lights_out --method sarsa --episodes 10000 --seed 0
+
+手法は ``--method`` で選ぶ (q-learning / sarsa / profit-sharing / monte-carlo)。
 """
 
 from __future__ import annotations
 
 import argparse
 import logging
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from dataclasses import fields
+from typing import Any
 
 from lights_out.application import ExperimentRunner, ExperimentSettings
-from lights_out.domain.agent import QLearningAgent, QLearningConfig
+from lights_out.domain.agent import (
+    Agent,
+    MonteCarloAgent,
+    MonteCarloConfig,
+    ProfitSharingAgent,
+    ProfitSharingConfig,
+    QLearningAgent,
+    QLearningConfig,
+    SarsaAgent,
+    SarsaConfig,
+)
 from lights_out.domain.environment import EnvironmentConfig, LightsOutEnvironment
 from lights_out.infrastructure import FileExperimentRepository
+
+#: --method の名前 -> (エージェント, 設定)。手法を足すときはここに 1 行足す。
+METHODS: dict[str, tuple[Callable[..., Agent], type]] = {
+    "q-learning": (QLearningAgent, QLearningConfig),
+    "sarsa": (SarsaAgent, SarsaConfig),
+    "profit-sharing": (ProfitSharingAgent, ProfitSharingConfig),
+    "monte-carlo": (MonteCarloAgent, MonteCarloConfig),
+}
+DEFAULT_METHOD = "q-learning"
+
+#: 手法の設定クラスに渡せるハイパーパラメータ (オプション名は ``--`` + 下線をハイフンにしたもの) と、help の説明。
+HYPERPARAMETERS = {
+    "learning_rate": "学習率 α",
+    "discount_factor": "割引率 γ (profit-sharing では信用割当の減衰率)",
+    "epsilon_start": "探索率 ε の初期値",
+    "epsilon_min": "ε の下限",
+    "epsilon_decay": "エピソードごとに ε に掛ける係数",
+}
+
+
+def _option(name: str) -> str:
+    return "--" + name.replace("_", "-")
+
+
+def _default_help(name: str) -> str:
+    """ハイパーパラメータ name の既定値を手法ごとに示す短い文。設定クラスから読むので、既定値を変えても食い違わない。"""
+    defaults: dict[Any, list[str]] = {}
+    unsupported = []
+    for method, (_, config_cls) in METHODS.items():
+        field = next((f for f in fields(config_cls) if f.name == name), None)
+        if field is None:
+            unsupported.append(method)
+        else:
+            defaults.setdefault(field.default, []).append(method)
+    if len(defaults) == 1:
+        text = f"既定: {next(iter(defaults))}"
+    else:
+        text = "既定: " + ", ".join(f"{'/'.join(methods)} {value}" for value, methods in defaults.items())
+    if unsupported:
+        text += f" ({'/'.join(unsupported)} では指定不可)"
+    return text
 
 
 def build_parser() -> argparse.ArgumentParser:
     env_defaults = EnvironmentConfig()
-    agent_defaults = QLearningConfig()
     settings_defaults = ExperimentSettings()
 
     parser = argparse.ArgumentParser(
-        prog="lights-out", description="ライツアウトをQ学習で学習し、結果を runs/ に記録する"
+        prog="lights-out",
+        description="ライツアウトを表形式の強化学習 (--method で手法を選ぶ) で学習し、結果を runs/ に記録する",
     )
     parser.add_argument("--seed", type=int, default=0, help="基準シード (環境=seed, エージェント=seed+1, 評価=seed+2)")
-    parser.add_argument("--name", default=settings_defaults.name, help="run の名前")
+    parser.add_argument("--name", default=None, help="run の名前 (既定: --method の名前)")
     parser.add_argument("--runs-dir", default="runs", help="記録の保存先")
     parser.add_argument("--demo", action="store_true", help="学習後に 1 エピソードを表示する")
 
@@ -34,12 +90,11 @@ def build_parser() -> argparse.ArgumentParser:
     env.add_argument("--scramble-moves", type=int, default=env_defaults.scramble_moves,
                      help="開始盤面を作る手数 (省略時は解ける盤面から一様に選ぶ)")
 
-    agent = parser.add_argument_group("Q学習")
-    agent.add_argument("--learning-rate", type=float, default=agent_defaults.learning_rate)
-    agent.add_argument("--discount-factor", type=float, default=agent_defaults.discount_factor)
-    agent.add_argument("--epsilon-start", type=float, default=agent_defaults.epsilon_start)
-    agent.add_argument("--epsilon-min", type=float, default=agent_defaults.epsilon_min)
-    agent.add_argument("--epsilon-decay", type=float, default=agent_defaults.epsilon_decay)
+    agent = parser.add_argument_group("エージェント", "ハイパーパラメータは省略すると、選んだ手法ごとの既定値になる")
+    agent.add_argument("--method", choices=list(METHODS), default=DEFAULT_METHOD,
+                       help=f"学習の手法 (既定: {DEFAULT_METHOD})")
+    for name, description in HYPERPARAMETERS.items():
+        agent.add_argument(_option(name), type=float, default=None, help=f"{description}。{_default_help(name)}")
 
     run = parser.add_argument_group("実験")
     run.add_argument("--episodes", type=int, default=settings_defaults.n_episodes, help="学習するエピソード数")
@@ -54,6 +109,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
+    agent_cls, config_cls = METHODS[args.method]
+    supported = {field.name for field in fields(config_cls)}
+    hyperparameters = {name: getattr(args, name) for name in HYPERPARAMETERS if getattr(args, name) is not None}
+    for name in hyperparameters:
+        if name not in supported:
+            parser.error(f"{_option(name)} は {args.method} では指定できません (この手法にない設定です)")
+
     try:
         env = LightsOutEnvironment(
             EnvironmentConfig(
@@ -63,19 +125,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 seed=args.seed,
             )
         )
-        agent = QLearningAgent(
-            env.n_actions,
-            QLearningConfig(
-                learning_rate=args.learning_rate,
-                discount_factor=args.discount_factor,
-                epsilon_start=args.epsilon_start,
-                epsilon_min=args.epsilon_min,
-                epsilon_decay=args.epsilon_decay,
-                seed=args.seed + 1,
-            ),
-        )
+        agent = agent_cls(env.n_actions, config_cls(**hyperparameters, seed=args.seed + 1))
         settings = ExperimentSettings(
-            name=args.name,
+            name=args.method if args.name is None else args.name,
             n_episodes=args.episodes,
             eval_interval=args.eval_interval,
             eval_episodes=args.eval_episodes,
@@ -92,7 +144,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-def _demo(env: LightsOutEnvironment, agent: QLearningAgent) -> None:
+def _demo(env: LightsOutEnvironment, agent: Agent) -> None:
     """学習済みの方策で 1 エピソード進め、盤面を表示する。"""
     state = env.reset()
     env.render()
